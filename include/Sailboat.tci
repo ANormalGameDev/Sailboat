@@ -1,0 +1,154 @@
+#ifndef SAILBOAT_IMPL
+#define SAILBOAT_IMPL
+
+#include "Sailboat.h"
+
+namespace Sailboat {
+    namespace detail {
+        template <typename ...Ts> bool Point<Ts...>::operator < (int i) { return i > at; }
+        template <typename ...Ts> bool Point<Ts...>::operator > (int i) { return i < at; }
+
+        template <typename ...Ts> Point<Ts...>::Point(Ts... ts) : values{ts...} {
+            for (typename traits::tw_traits<Ts...>::easing_type& f : easings) { f = Easing::Lerp; }
+        }
+    }
+
+    template <typename ...Ts> Tween<Ts...>& Tween<Ts...>::to(Ts... ts) {
+        m_points.emplace_back(ts...);
+        return *this;
+    }
+
+    template <typename ...Ts>
+    template <typename I> inline Tween<Ts...>& Tween<Ts...>::in(I time) {
+        m_length += time;
+        (*(m_points.end() - 1)).at = m_length;
+        for (u_int16_t& i : (*(m_points.end() - 1)).durations) { i = static_cast<u_int16_t>(time); }
+        return *this;
+    }
+
+    template <typename ...Ts>
+    template <typename ...Is> Tween<Ts...>& Tween<Ts...>::in(Is... is) {
+        static_assert(sizeof...(Is) == sizeof...(Ts), "Number of durations passed to in should be equal to the number of elements.");
+        std::array<int, sizeof...(Ts)> durations = {{ is... }};
+        std::copy(durations.begin(), durations.end(), (*(m_points.end() - 1)).durations.begin());
+
+        m_length += *std::max_element(durations.begin(), durations.end());
+        (*(m_points.end() - 1)).at = m_length;
+        return *this;
+    }
+
+    template <typename ...Ts>
+    template <typename I> inline Tween<Ts...>& Tween<Ts...>::wait(I time) {
+        m_length += time;
+        (*(m_points.end() - 1)).at = m_length;
+        for (int16_t& i : (*(m_points.end() - 1)).delays) { i = static_cast<int16_t>(time); }
+        return *this;
+    }
+
+    template <typename ...Ts>
+    template <typename ...Is> Tween<Ts...>& Tween<Ts...>::wait(Is... is) {
+        static_assert(sizeof...(Is) == sizeof...(Ts), "Number of delays passed to in should be equal to the number of elements.");
+        std::array<int, sizeof...(Ts)> delays = {{ is... }};
+        std::copy(delays.begin(), delays.end(), (*(m_points.end() - 1)).delays.begin());
+
+        m_length += *std::max_element(delays.begin(), delays.end());
+        (*(m_points.end() - 1)).at = m_length;
+        return *this;
+    }
+
+    template <typename ...Ts> Tween<Ts...>& Tween<Ts...>::via(typename m_traits::easing_type&& func) {
+        for (typename m_traits::easing_type& f : (*(m_points.end() - 1)).easings) { f = func; }
+        return *this;
+    }
+
+    template <typename ...Ts>
+    template <typename F, typename F1, typename ...Fs>
+    inline Tween<Ts...>& Tween<Ts...>::via(F&& f, F1&& f1, Fs&&... fs) {
+        static_assert(sizeof...(Fs) + 2 == sizeof...(Ts), "Number of easing functions passed to via should be equal to the number of elements.");
+        detail::tup_helper<0, typename m_traits::eas_arr_type, F, F1, Fs...>::resolve((*(m_points.end() - 1)).easings, f, f1, fs...);
+        return *this;
+    }
+
+    template <std::size_t I = 0, typename ...Ts>
+    typename std::enable_if<I == sizeof...(Ts), void>::type ease(typename traits::tw_traits<Ts...>::value_type&, typename traits::tw_traits<Ts...>::value_type&, std::size_t, typename traits::tw_traits<Ts...>::del_arr_type&, typename traits::tw_traits<Ts...>::dur_arr_type&, typename traits::tw_traits<Ts...>::eas_arr_type&, typename traits::tw_traits<Ts...>::value_type&) { return; }
+
+    template <std::size_t I = 0, typename ...Ts>
+    typename std::enable_if<I < sizeof...(Ts), void>::type ease(typename traits::tw_traits<Ts...>::value_type& from,
+                                                                typename traits::tw_traits<Ts...>::value_type& to,
+                                                                std::size_t elapsed,
+                                                                typename traits::tw_traits<Ts...>::del_arr_type& delays,
+                                                                typename traits::tw_traits<Ts...>::dur_arr_type& durations,
+                                                                typename traits::tw_traits<Ts...>::eas_arr_type& easings,
+                                                                typename traits::tw_traits<Ts...>::value_type& out)
+    {
+        float true_elapsed = float(elapsed) - std::get<I>(delays);
+        if (true_elapsed < 0) true_elapsed = 0;
+        float progress = true_elapsed / std::get<I>(durations);
+        if (progress > 1) progress = 1;
+
+        std::get<I>(out) = static_cast<std::tuple_element_t<I, std::tuple<Ts...>>>(std::get<I>(easings)(float(std::get<I>(from)), float(std::get<I>(to)), progress));
+        ease<I + 1, Ts...>(from, to, elapsed, delays, durations, easings, out);
+    }
+
+    template <typename Func, typename Tp, int ...S>
+    void call(Func& func, Tp& args, detail::seq<S...>) {
+        if (func == NULL) return;
+        func(std::get<S>(args)...);
+    }
+
+    template <typename ...Ts> const typename traits::tw_traits<Ts...>::value_type Tween<Ts...>::step(int by, bool suppress_cb) {
+        m_at += by;
+        auto it = std::lower_bound(m_points.begin(), m_points.end(), m_at);
+        if (by >= 0 ? it == m_points.end() : m_at < 0) return m_values;
+
+        detail::Point<Ts...> prev = *(it - 1), next = *(it);
+        ease<0, Ts...>(prev.values, next.values, m_at - prev.at, next.delays, next.durations, next.easings, m_values);
+        if (suppress_cb || on_step_cb == NULL) return m_values;
+
+        call(on_step_cb, m_values, detail::gen_seq<sizeof...(Ts)>());
+        return m_values;
+    }
+
+    template <typename ...Ts> inline Tween<Ts...>& Tween<Ts...>::on_step(std::function<void(Ts...)>&& func) {
+        if (func != NULL) on_step_cb = func;
+        return *this;
+    }
+
+    template <typename ...Ts> const typename traits::tw_traits<Ts...>::value_type Tween<Ts...>::seek(std::size_t at) {
+        typename traits::tw_traits<Ts...>::value_type r_values;
+
+        auto it = std::lower_bound(m_points.begin(), m_points.end(), at);
+        if (it == m_points.end()) return r_values;
+
+        detail::Point<Ts...> prev = *(it - 1), next = *(it);
+        ease<0, Ts...>(prev.values, next.values, at - prev.at, next.durations, next.easings, r_values);
+        return r_values;
+    }
+    template <typename ...Ts> std::size_t Tween<Ts...>::length() { return m_length; }
+    template <typename ...Ts> std::size_t Tween<Ts...>::at() { return m_at; }
+
+    template <typename ...Ts> Tween<Ts...>::Tween(Ts... ts) : m_values{ts...} {
+        m_points.emplace_back(ts...);
+        m_points[0].at = -1;
+
+        m_points.emplace_back(ts...);
+    };
+
+    // Functions for user convenience
+    template <typename ...Ts> Tween<Ts...>& Tween<Ts...>::jump(std::size_t by) {
+        step(by, true);
+        return *this;
+    }
+
+    template <typename ...Ts> Tween<Ts...>& Tween<Ts...>::jump_to_end() {
+        step(m_length - m_at, true);
+        return *this;
+    }
+
+    template <typename ...Ts> Tween<Ts...>& Tween<Ts...>::jump_to_start() {
+        step(-m_at, true);
+        return *this;
+    }
+}
+
+#endif
