@@ -81,9 +81,8 @@ namespace Sailboat {
                                                                 typename traits::tw_traits<Ts...>::eas_arr_type& easings,
                                                                 typename traits::tw_traits<Ts...>::value_type& out)
     {
-        float true_elapsed = float(elapsed) - std::get<I>(delays);
-        if (true_elapsed < 0) true_elapsed = 0;
-        float progress = true_elapsed / std::get<I>(durations);
+        float progress = (float(elapsed) - std::get<I>(delays)) / std::get<I>(durations);
+        if (progress < 0) progress = 0;
         if (progress > 1) progress = 1;
 
         std::get<I>(out) = static_cast<std::tuple_element_t<I, std::tuple<Ts...>>>(std::get<I>(easings)(float(std::get<I>(from)), float(std::get<I>(to)), progress));
