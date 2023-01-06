@@ -140,7 +140,7 @@ namespace Sailboat {
     }
 
     template <typename ...Ts> Tween<Ts...>& Tween<Ts...>::jump_to_end() {
-        step(m_length - m_at, true);
+        step(m_length - m_at + 1, true);
         return *this;
     }
 

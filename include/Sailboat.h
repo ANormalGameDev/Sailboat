@@ -50,7 +50,7 @@ namespace Sailboat {
                 typename m_traits::del_arr_type delays;
                 typename m_traits::dur_arr_type durations;
                 typename m_traits::eas_arr_type easings;
-                std::size_t at {0};
+                int at {0};
 
                 bool operator > (int i);
                 bool operator < (int i);
