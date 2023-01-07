@@ -20,8 +20,9 @@ namespace Sailboat {
             typedef typename values_type<homogen<Ts...>::value, Ts...>::type value_type;
             typedef std::array<u_int16_t, sizeof...(Ts)> dur_arr_type;
             typedef std::array<int16_t, sizeof...(Ts)> del_arr_type;
-            typedef std::function<float(float, float, float)> easing_type;
-            typedef std::array<std::function<float(float, float, float)>, sizeof...(Ts)> eas_arr_type;
+            typedef std::function<float(float)> easing_type;
+            typedef std::array<std::function<float(float)>, sizeof...(Ts)> eas_arr_type;
+            typedef std::function<void(Ts...)> callback_type;
             typedef Tween<Ts...> type;
         };
     }
@@ -65,9 +66,9 @@ namespace Sailboat {
             typename m_traits::value_type m_values;
 
             std::vector<detail::Point<Ts...>> m_points;
-            std::function<void(Ts...)> on_step_cb {NULL};
+            typename m_traits::callback_type on_step_cb {NULL};
             std::size_t m_length {0};
-            int m_at {0};
+            std::size_t m_at {0};
         public:
             inline Tween<Ts...>& to(Ts... ts);
 
@@ -81,7 +82,7 @@ namespace Sailboat {
             template <typename F, typename F1, typename ...Fs> inline Tween<Ts...>& via(F&& f, F1&& f1, Fs&&... fs);
 
             inline const typename m_traits::value_type step(int by = 1, bool suppress_cb = false);
-            inline Tween<Ts...>& on_step(std::function<void(Ts...)>&& func);
+            inline Tween<Ts...>& on_step(typename m_traits::callback_type&& func);
 
             inline const typename m_traits::value_type seek(std::size_t at);
             inline std::size_t length();
@@ -100,8 +101,8 @@ namespace Sailboat {
     }
 
     namespace Easing {
-        static inline float Lerp(float from, float to, float x) { return from + (to - from) * x; }
-        static inline float SmoothStep(float from, float to, float x) { return from + (to - from) * x * x * (3 - 2 * x); }
+        static inline float Lerp(float x) { return x; }
+        static inline float SmoothStep(float x) { return x * x * (3 - 2 * x); }
     }
 }
 
