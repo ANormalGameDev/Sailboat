@@ -51,7 +51,15 @@ namespace Sailboat {
         std::array<int, sizeof...(Ts)> delays = {{ is... }};
         std::copy(delays.begin(), delays.end(), (*(m_points.end() - 1)).delays.begin());
 
-        m_length += *std::max_element(delays.begin(), delays.end());
+        int current {0}, delay {0};
+        for (int i = 0; i < sizeof...(Ts); i++) {
+            if ((*(m_points.end() - 1)).durations[i] + delays[i] > current) {
+                current = delays[i] + (*(m_points.end() - 1)).durations[i];
+                delay = delays[i];
+            }
+        }
+
+        m_length += delay;
         (*(m_points.end() - 1)).at = m_length;
         return *this;
     }
